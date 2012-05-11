@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>Database Wrapper Tests</title>
+		<link rel="stylesheet" href="qunit-1.2.0.css"
+		/>
+		<script type="text/javascript" src="../vendor/when.js"></script>
+		<script type="text/javascript" src="../lib/IDBWrapper.js"></script>
+	</head>
+	<body>
+		<h1 id="qunit-header">Database Wrapper Tests</h1>
+		<h2 id="qunit-banner"></h2>
+		<ol id="qunit-tests"></ol>
+		<script src="qunit-1.2.0.js"></script>
+		<script type="text/javascript">
+
+			function forEach(array, action, scope) {
+				for (var i = 0, len = array.length; i < len; i++) {
+					action.call(scope, array[i]);
+				}
+			}
+
+			function map(array, func, scope) {
+				var result = [];
+				forEach(array, function (element) {
+					result.push(func.call(scope, element));
+				}, scope);
+				return result;
+			}
+
+			function log(v) {
+				console.log(v);
+			}
+
+			var db;
+
+			function withDB (test, dbname) {
+				dbname = dbname || +new Date();
+				
+				db = new IDB({
+						name: dbname,
+						version: '1'
+					});
+
+				db.dbOpen.then(function () {
+					test(db);
+				}, log);
+			}
+
+			function databaseTearDown(a,b,c) {
+				db.close();
+				db.destroy();
+			}
+
+			module("Database", { teardown: databaseTearDown });
+
+			asyncTest("construct and open", 2, function () {
+				withDB(function (db) {
+					ok(db, 'should return a value');
+					equal(db.name, 'TestDbConstruct', 'should return a value');
+					start();
+				}, 'TestDbConstruct');
+			});
+
+			asyncTest("close", 1, function () {
+				withDB(function (db) {
+					ok(db.close(), 'close should return true');
+					start();
+				});
+			});
+
+			asyncTest("getStore with opts", 3, function () {
+				var opts = {
+						keyPath: 'cat',
+						autoIncrement: true
+					};
+
+				withDB(function (db) {
+					db.getStore('test', opts, function(store) {
+						ok(store, 'getStore should return a Store');
+						equal(store.name, 'test', 'store name should return be "test"');
+						//equal(store._store.keyPath, 'cat', 'store keyPath should return be "cat"');
+						ok(db.close(), 'close should return true')
+						start();
+					})
+				});
+			});			
+
+			asyncTest("getStore no opts", 2, function () {
+				withDB(function (db) {
+					db.getStore('test', function(store) {
+						ok(store, 'getStore should return a Store');
+						ok(db.close(), 'close should return true')
+						start();
+					})
+				});
+			});
+
+			// Store Tests
+
+			var store;
+
+			function withStore(test, storeopts) {
+				withDB(function (db) {
+					db.getStore('test', storeopts, function(store) {
+						test(store);	
+					});
+				});
+			}			
+
+			function storeTearDown() {
+				databaseTearDown();
+			}
+
+			module("Store", { teardown: storeTearDown });
+
+			asyncTest("put - simple object", 2, function () {
+				var obj = { animal: 'cat' };
+
+				withStore(function (store) {
+					store.put(obj, {
+						success: function(v) {
+							ok(v, 'result should be an object');
+							equal(v.result, 1, 'result should be 1');
+							start();
+						}
+					});
+				});
+			});
+
+			asyncTest("put - multiple simple object", 3, function () {
+				var obj = map(new Array(10), function() {
+						return { val: Math.random() };
+					});
+
+				withStore(function (store) {
+					store.put(obj, {
+						success: function(v) {
+							ok(v[0], 'result should be an object');
+							equal(v[0].result, 1, 'result should be 1');
+							equal(v.length, 10, 'result length should be 10');
+							start();
+						}
+					});
+				});
+			});
+
+			asyncTest("count - all", 1, function () {
+				var obj = map(new Array(10), function() {
+						return { val: Math.random() };
+					});
+
+				withStore(function (store) {
+					store.put(obj, {
+						success: function(v) {
+							store.count({
+								success: function (obj) {
+									equal(obj.result, 10, 'result should be 10');
+									start();
+								}
+							});
+						}
+					});
+				});
+			});			
+
+			asyncTest("count - some", 1, function () {
+				var obj = map(new Array(10), function() {
+						return { val: Math.random() };
+					});
+
+				withStore(function (store) {
+					store.put(obj, {
+						success: function(v) {
+							store.count(IDB.keyRange.lowerBound(5, true), {
+								success: function (obj) {
+									equal(obj.result, 5, 'result should be 5');
+									start();
+								}
+							});
+						}
+					});
+				});
+			});			
+
+			asyncTest("get - simple object ", 2, function () {
+				var input = { animal: 'dog' };
+
+				withStore(function (store) {
+					store.put(input, {
+						success: function(v) {
+							store.get(v.result, {
+								success: function(obj) {
+									ok(obj, 'result should be an object');
+									equal(obj.result.animal, 'dog', 'result should be dog');
+									start();
+								}
+							});
+						}
+					});
+				});
+			});
+
+		</script>
+	</body>
+
+</html>
