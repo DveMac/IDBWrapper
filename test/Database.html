@@ -29,71 +29,56 @@
 				return result;
 			}
 
+			function getDbName() {
+				return +new Date() + "-" + Math.round(Math.random() * 10000);
+			}
+
 			function log(v) {
 				console.log(v);
 			}
 
-			var db;
-
-			function withDB (test, dbname) {
-				dbname = dbname || +new Date();
-				
-				db = new IDB({
-						name: dbname,
-						version: '1'
-					});
-
-				db.dbOpen.then(function () {
-					test(db);
-				}, log);
-			}
-
-			function databaseTearDown(a,b,c) {
-				db.close();
-				db.destroy();
+			function databaseTearDown() {
+				IDB.destroyAll(true,true);
 			}
 
 			module("Database", { teardown: databaseTearDown });
 
 			asyncTest("construct and open", 2, function () {
-				withDB(function (db) {
+				IDB.use('TestDbConstruct', '1', function (db) {
 					ok(db, 'should return a value');
 					equal(db.name, 'TestDbConstruct', 'should return a value');
 					start();
-				}, 'TestDbConstruct');
+				});
 			});
 
 			asyncTest("close", 1, function () {
-				withDB(function (db) {
+				IDB.use(getDbName(), '1', function (db) {
 					ok(db.close(), 'close should return true');
 					start();
 				});
 			});
 
-			asyncTest("getStore with opts", 3, function () {
+			asyncTest("getStore with opts", 2, function () {
 				var opts = {
 						keyPath: 'cat',
 						autoIncrement: true
 					};
 
-				withDB(function (db) {
-					db.getStore('test', opts, function(store) {
-						ok(store, 'getStore should return a Store');
-						equal(store.name, 'test', 'store name should return be "test"');
-						//equal(store._store.keyPath, 'cat', 'store keyPath should return be "cat"');
-						ok(db.close(), 'close should return true')
-						start();
-					})
+				IDB.use(getDbName(), '1', function (db) {
+					var store = db.store('test', opts);
+					ok(store, 'getStore should return a Store');
+					equal(store.name, 'test', 'store name should return be "test"');
+					//equal(store._store.keyPath, 'cat', 'store keyPath should return be "cat"');
+					start();
 				});
 			});			
 
 			asyncTest("getStore no opts", 2, function () {
-				withDB(function (db) {
-					db.getStore('test', function(store) {
-						ok(store, 'getStore should return a Store');
-						ok(db.close(), 'close should return true')
-						start();
-					})
+				IDB.use(getDbName(), '1', function (db) {
+					var store = db.store('test');
+					ok(store, 'getStore should return a Store');
+					ok(db.close(), 'close should return true')
+					start();
 				});
 			});
 
@@ -102,10 +87,8 @@
 			var store;
 
 			function withStore(test, storeopts) {
-				withDB(function (db) {
-					db.getStore('test', storeopts, function(store) {
-						test(store);	
-					});
+				IDB.use(getDbName(), '1', function (db) {
+					test(db.store('test', storeopts));
 				});
 			}			
 
@@ -129,7 +112,7 @@
 				});
 			});
 
-			asyncTest("put - multiple simple object", 3, function () {
+			asyncTest("put - multiple simple object", 2, function () {
 				var obj = map(new Array(10), function() {
 						return { val: Math.random() };
 					});
@@ -139,12 +122,27 @@
 						success: function(v) {
 							ok(v[0], 'result should be an object');
 							equal(v[0].result, 1, 'result should be 1');
-							equal(v.length, 10, 'result length should be 10');
 							start();
 						}
 					});
 				});
 			});
+
+			// asyncTest("put - many simple object", 2, function () {
+			// 	var obj = map(new Array(1000), function() {
+			// 			return { val: Math.random() };
+			// 		});
+
+			// 	withStore(function (store) {
+			// 		store.put(obj, {
+			// 			success: function(v) {
+			// 				ok(v[0], 'result should be an object');
+			// 				equal(v[0].result, 1, 'result should be 1');
+			// 				start();
+			// 			}
+			// 		});
+			// 	});
+			// });
 
 			asyncTest("count - all", 1, function () {
 				var obj = map(new Array(10), function() {
@@ -201,6 +199,50 @@
 					});
 				});
 			});
+
+			asyncTest("clear", 1, function () {
+				var obj = map(new Array(10), function() {
+						return { val: Math.random() };
+					});
+
+				withStore(function (store) {
+					store.put(obj, {
+						success: function(v) {
+							store.clear({
+								success: function (c) {
+									store.count({
+										success: function (s) {
+											equal(s.result, 0, 'result should be 0');
+											start();
+										}
+									});
+								}
+							});
+						}
+					});
+				});
+			});		
+
+
+			asyncTest("put - async", 1, function () {
+				IDB.use('IDB', 1, function (db) {
+					db.store('test').put({ val: Math.random() });
+					db.store('test').put({ val: Math.random() });
+					db.store('test').put({ val: Math.random() });
+					db.store('test').put({ val: Math.random() });
+					db.store('test').put({ val: Math.random() });
+					setTimeout(function() {
+						db.store('test').count({
+							success: function (r) {
+								equal(r.result, 5);
+								start();
+							},
+							error: log
+						})
+					}, 1000);
+				});		
+			});
+
 
 		</script>
 	</body>
